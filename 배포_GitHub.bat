@@ -4,7 +4,7 @@ echo ===================================================
 echo [LivingBreath] GitHub 배포 및 동기화 스크립트
 echo ===================================================
 echo.
-cd /d "D:\F\LivingBreath"
+cd /d "%~dp0"
 git add .
 git commit -m "LivingBreath 업데이트: %date% %time%"
 git branch -M main
