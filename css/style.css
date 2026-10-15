@@ -321,4 +321,92 @@ body.bible-view-active {
   overflow: hidden !important;
 }
 
+/* ==================== 화면 글씨 크기 조절 (Font Size Scaling) ==================== */
+html.font-size-small {
+  font-size: 14.5px;
+}
+html.font-size-normal {
+  font-size: 16px;
+}
+html.font-size-large {
+  font-size: 18px;
+}
+html.font-size-xlarge {
+  font-size: 20.5px;
+}
+
+/* Specific content scaling enhancements for high readability */
+html.font-size-small .diary-content-text,
+html.font-size-small #preview-formatted-content,
+html.font-size-small .reading-card-text {
+  font-size: 0.9rem !important;
+  line-height: 1.7 !important;
+}
+
+html.font-size-normal .diary-content-text,
+html.font-size-normal #preview-formatted-content,
+html.font-size-normal .reading-card-text {
+  font-size: 1rem !important;
+  line-height: 1.75 !important;
+}
+
+html.font-size-large .diary-content-text,
+html.font-size-large #preview-formatted-content,
+html.font-size-large .reading-card-text {
+  font-size: 1.125rem !important;
+  line-height: 1.8 !important;
+}
+
+html.font-size-xlarge .diary-content-text,
+html.font-size-xlarge #preview-formatted-content,
+html.font-size-xlarge .reading-card-text {
+  font-size: 1.25rem !important;
+  line-height: 1.85 !important;
+}
+
+/* Font Size Segmented Buttons */
+.font-size-btn {
+  background-color: #ffffff;
+  border: 1px solid #e5ece5;
+  color: #4b5563;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.font-size-btn:hover {
+  background-color: #f0fdf4;
+  border-color: #a7f3d0;
+}
+.font-size-btn.active {
+  background-color: #375a43 !important;
+  color: #ffffff !important;
+  border-color: #375a43 !important;
+  box-shadow: 0 2px 8px rgba(55, 90, 67, 0.25);
+  font-weight: 700 !important;
+}
+.font-size-btn.active span {
+  color: #a7f3d0 !important;
+}
+
+body.theme-dark .font-size-btn {
+  background-color: #242424;
+  border-color: #383838;
+  color: #d1d5db;
+}
+body.theme-dark .font-size-btn:hover {
+  background-color: #2e3831;
+  border-color: #52b788;
+}
+body.theme-dark .font-size-btn.active {
+  background-color: #52b788 !important;
+  color: #121212 !important;
+  border-color: #52b788 !important;
+}
+body.theme-dark .font-size-btn.active span {
+  color: #064e3b !important;
+}
+body.theme-dark #font-preview-sample {
+  color: #e5e5e5 !important;
+}
+
+
 

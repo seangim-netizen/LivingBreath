@@ -70,6 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
       renderGratitudeStream();
     } else if (tabName === 'bible') {
       syncThemeToBible(currentTheme);
+      syncFontSizeToBible(currentFontSize);
     } else if (tabName === 'settings') {
       renderSettings();
     }
@@ -1152,11 +1153,82 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('btn-theme-toggle')?.addEventListener('click', toggleGlobalTheme);
 
-  // 성경 iframe 로드 완료 시 즉시 테마 전달
+  // 성경 iframe 로드 완료 시 즉시 테마 및 글씨 크기 전달
   const bibleIframeEl = document.getElementById('bible-iframe');
   if (bibleIframeEl) {
     bibleIframeEl.addEventListener('load', () => {
       syncThemeToBible(currentTheme);
+      syncFontSizeToBible(currentFontSize);
+    });
+  }
+
+  // --- 화면 글씨 크기 조절 관리 ---
+  const FONT_SIZES = {
+    small: { name: '작게', percent: '90%', htmlClass: 'font-size-small', biblePercent: 90 },
+    normal: { name: '보통', percent: '100%', htmlClass: 'font-size-normal', biblePercent: 100 },
+    large: { name: '크게', percent: '115%', htmlClass: 'font-size-large', biblePercent: 115 },
+    xlarge: { name: '아주 크게', percent: '130%', htmlClass: 'font-size-xlarge', biblePercent: 130 }
+  };
+  let currentFontSize = 'normal';
+  try {
+    currentFontSize = localStorage.getItem('jwj_font_size') || 'normal';
+    if (!FONT_SIZES[currentFontSize]) currentFontSize = 'normal';
+  } catch (e) {
+    currentFontSize = 'normal';
+  }
+
+  function applyFontSize(sizeKey, showNotice = false) {
+    if (!FONT_SIZES[sizeKey]) sizeKey = 'normal';
+    currentFontSize = sizeKey;
+
+    const htmlEl = document.documentElement;
+    Object.keys(FONT_SIZES).forEach(k => {
+      htmlEl.classList.remove(FONT_SIZES[k].htmlClass);
+    });
+    htmlEl.classList.add(FONT_SIZES[sizeKey].htmlClass);
+
+    try {
+      localStorage.setItem('jwj_font_size', sizeKey);
+    } catch (e) {}
+
+    const label = document.getElementById('font-size-label');
+    if (label) {
+      label.textContent = `${FONT_SIZES[sizeKey].name} (${FONT_SIZES[sizeKey].percent})`;
+    }
+
+    document.querySelectorAll('.font-size-btn').forEach(btn => {
+      const isActive = (btn.dataset.fontSize === sizeKey);
+      btn.classList.toggle('active', isActive);
+    });
+
+    syncFontSizeToBible(sizeKey);
+
+    if (showNotice) {
+      showToast(`글씨 크기가 '${FONT_SIZES[sizeKey].name}'(${FONT_SIZES[sizeKey].percent})로 변경되었습니다.`);
+    }
+  }
+
+  function syncFontSizeToBible(sizeKey) {
+    const bibleIframe = document.getElementById('bible-iframe');
+    if (bibleIframe && bibleIframe.contentWindow) {
+      try {
+        bibleIframe.contentWindow.postMessage({
+          type: 'SET_FONT_SIZE',
+          size: sizeKey,
+          percent: FONT_SIZES[sizeKey]?.biblePercent || 100
+        }, '*');
+      } catch (err) {}
+    }
+  }
+
+  function initFontSize() {
+    applyFontSize(currentFontSize, false);
+
+    document.querySelectorAll('.font-size-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const size = btn.dataset.fontSize;
+        if (size) applyFontSize(size, true);
+      });
     });
   }
 
@@ -1413,8 +1485,9 @@ document.addEventListener('DOMContentLoaded', () => {
     showToast(`📖 ${dateStr} 일기를 불러왔습니다.`);
   }
 
-  // 검색 초기화 및 테마 초기 적용
+  // 검색, 글씨 크기 초기화 및 테마 초기 적용
   initDiarySearch();
+  initFontSize();
   applyGlobalTheme(currentTheme);
 
   // 초기 실행: 오늘 날짜 일기 로드

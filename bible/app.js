@@ -480,16 +480,30 @@ function setupEventListeners() {
     });
   });
 
-  // 부모 창(예수동행앱 메인)으로부터 테마 동기화 메시지 수신
+  // 부모 창(예수동행앱 메인)으로부터 테마 및 글씨 크기 동기화 메시지 수신
   window.addEventListener("message", (e) => {
     if (e.data && e.data.type === "SET_THEME") {
       state.theme = e.data.theme === "DARK" ? "theme-dark" : "theme-light";
       saveSettings();
       applySettings();
+    } else if (e.data && e.data.type === "SET_FONT_SIZE") {
+      const percent = e.data.percent || 100;
+      state.fontSize = percent;
+      saveSettings();
+      applySettings();
     }
   });
 
-  // 초기 로드 시 부모 테마 확인 및 적용
+  // 초기 로드 시 부모 글씨 크기 및 테마 확인 및 적용
+  try {
+    const savedFontSizeKey = localStorage.getItem("jwj_font_size");
+    const fontPercentMap = { small: 90, normal: 100, large: 115, xlarge: 130 };
+    if (savedFontSizeKey && fontPercentMap[savedFontSizeKey]) {
+      state.fontSize = fontPercentMap[savedFontSizeKey];
+      applySettings();
+    }
+  } catch (err) {}
+
   try {
     const savedTheme = localStorage.getItem("jesus_walk_theme");
     if (savedTheme) {
