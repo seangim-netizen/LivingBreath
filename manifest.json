@@ -1,0 +1,17 @@
+{
+  "name": "예수동행일기 - Journal with Jesus",
+  "short_name": "예수동행일기",
+  "description": "매일 주님과 동행하는 삶을 점검하고 기록하는 예수동행일기 웹앱",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f8faf8",
+  "theme_color": "#3b5a45",
+  "icons": [
+    {
+      "src": "./assets/logo.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
