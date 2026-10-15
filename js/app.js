@@ -47,6 +47,13 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
+    if (tabName === 'bible') {
+      window.scrollTo({ top: 0 });
+      document.body.classList.add('bible-view-active');
+    } else {
+      document.body.classList.remove('bible-view-active');
+    }
+
     // 탭별 특화 렌더링
     if (tabName === 'search') {
       executeDiarySearch();

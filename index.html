@@ -53,34 +53,34 @@
     </div>
 
     <!-- 메인 탭 바 (iOS 세그먼트 스크롤 탭: 글자 줄바꿈 100% 방지 & 깨짐 없는 고선명 SVG 아이콘) -->
-    <nav class="max-w-4xl mx-auto px-2 sm:px-3 py-1.5 flex items-center gap-1 sm:gap-1.5 border-t border-[#f0f4f0] bg-white/95 overflow-x-auto scrollbar-none">
+    <nav class="max-w-4xl mx-auto px-1 sm:px-3 flex items-center justify-between border-t border-[#f0f4f0] bg-white/95 overflow-x-auto scrollbar-none">
       <button type="button" data-tab="write" class="nav-tab active">
         <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-        <span>동행일기</span>
+        <span>일기</span>
       </button>
       <button type="button" data-tab="search" class="nav-tab">
         <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-        <span>일기 검색</span>
+        <span>검색</span>
       </button>
       <button type="button" data-tab="calendar" class="nav-tab">
         <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-        <span>동행 달력</span>
+        <span>달력</span>
       </button>
       <button type="button" data-tab="stats" class="nav-tab">
         <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
-        <span>동행 통계</span>
+        <span>통계</span>
       </button>
       <button type="button" data-tab="gratitude" class="nav-tab">
         <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>
-        <span>은혜의 감사</span>
+        <span>감사</span>
       </button>
       <button type="button" data-tab="bible" class="nav-tab">
         <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
-        <span>전체성경</span>
+        <span>성경</span>
       </button>
       <button type="button" data-tab="settings" class="nav-tab">
         <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-        <span>설정/동기화</span>
+        <span>설정</span>
       </button>
     </nav>
   </header>
@@ -636,30 +636,8 @@
     </section>
 
     <!-- ==================== TAB 5: 전체성경 66권 (Bible) ==================== -->
-    <section id="view-bible" class="view-section hidden space-y-3">
-      <!-- 성경 헤더 바 -->
-      <div class="app-card p-3.5 sm:p-4 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-emerald-100">
-        <div class="flex items-center gap-2.5">
-          <span class="text-2xl">📖</span>
-          <div>
-            <h3 class="text-sm sm:text-base font-bold text-[#375a43] flex items-center gap-2">
-              <span>전체성경 66권</span>
-              <span class="text-[11px] font-normal text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">9개 역본 선택 & 2개 역본 대조 탑재</span>
-            </h3>
-            <p class="text-xs text-gray-500 mt-0.5">9개 역본(개역개정, 새번역, 개역한글, 쉬운성경, 현대인의성경, NIV, NLT, NKJV, RSV) 선택, 2개 역본 동시 대조, 음성 낭독(TTS), 고속 검색 기능을 지원합니다.</p>
-          </div>
-        </div>
-        <div class="flex items-center gap-2">
-          <a href="./bible/index.html" target="_blank" class="px-3.5 py-1.5 bg-[#f6f9f6] hover:bg-[#ebf3ec] text-[#375a43] border border-[#d2e2d4] text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all shadow-2xs">
-            <span>↗️ 새 창으로 성경 열기</span>
-          </a>
-        </div>
-      </div>
-
-      <!-- 성경 앱 iframe 컨테이너 -->
-      <div class="w-full bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden" style="height: 84vh;">
-        <iframe id="bible-iframe" src="./bible/index.html" class="w-full h-full border-0" title="66권 전체성경 앱"></iframe>
-      </div>
+    <section id="view-bible" class="view-section hidden w-full -mx-3 sm:-mx-4 -mt-4 sm:-mt-6 pb-0" style="height: calc(100dvh - 102px);">
+      <iframe id="bible-iframe" src="./bible/index.html" class="w-full h-full border-0" title="66권 전체성경 앱"></iframe>
     </section>
 
     <!-- ==================== TAB 6: 설정 및 동기화 (Settings) ==================== -->
