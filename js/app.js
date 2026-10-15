@@ -30,12 +30,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- 탭 전환 로직 ---
   function switchTab(tabName) {
     tabButtons.forEach(btn => {
-      if (btn.dataset.tab === tabName) {
-        btn.classList.add('active', 'text-emerald-800', 'border-b-2', 'border-emerald-800');
-        btn.classList.remove('text-gray-500');
-      } else {
-        btn.classList.remove('active', 'text-emerald-800', 'border-b-2', 'border-emerald-800');
-        btn.classList.add('text-gray-500');
+      const isActive = (btn.dataset.tab === tabName);
+      btn.classList.toggle('active', isActive);
+      if (isActive) {
+        try {
+          btn.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+        } catch (e) {}
       }
     });
 
@@ -205,7 +205,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const streak = store.calculateStreak();
     const streakEl = document.getElementById('header-streak-badge');
     if (streakEl) {
-      streakEl.innerHTML = `🔥 <strong>${streak}일 연속 동행 중</strong>`;
+      streakEl.innerHTML = `🔥 <strong>${streak}일</strong><span class="hidden sm:inline"> 연속 동행</span>`;
     }
   }
 
