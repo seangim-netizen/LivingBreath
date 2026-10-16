@@ -131,9 +131,35 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps(err_data, ensure_ascii=False).encode('utf-8'))
 
 
+def periodic_auto_sync_worker(interval_sec=900):
+    import time
+    while True:
+        time.sleep(interval_sec)
+        try:
+            if os.path.exists(os.path.join(LIVINGBREATH_DIR, 'sync_jwj_diaries.py')):
+                if LIVINGBREATH_DIR not in sys.path:
+                    sys.path.insert(0, LIVINGBREATH_DIR)
+                import importlib, sync_jwj_diaries
+                importlib.reload(sync_jwj_diaries)
+                sync_jwj_diaries.run_import(full_sync=False, push_git=True)
+        except Exception:
+            pass
+        try:
+            if os.path.exists(os.path.join(PANIEL_DIR, 'sync_paniel.py')):
+                if PANIEL_DIR not in sys.path:
+                    sys.path.insert(0, PANIEL_DIR)
+                import importlib, sync_paniel
+                importlib.reload(sync_paniel)
+                sync_paniel.run_import(full_sync=False, push_git=True)
+        except Exception:
+            pass
+
+
 def run(open_browser=True):
     os.chdir(DIRECTORY)
     port = PORT
+
+    threading.Thread(target=periodic_auto_sync_worker, args=(900,), daemon=True).start()
 
     for p in range(PORT, PORT + 20):
         try:
