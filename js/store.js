@@ -33,14 +33,18 @@ const DEFAULT_GROUPS = [
 
 class JournalStore {
   constructor() {
-    this.storageKey = 'jesus_walk_journals_v2';
-    this.settingsKey = 'jesus_walk_settings_v2';
+    this.storageKey = 'livingbreath_walk_journals_v3';
+    this.settingsKey = 'livingbreath_walk_settings_v3';
+    try {
+      localStorage.removeItem('jesus_walk_journals_v2');
+      localStorage.removeItem('jesus_walk_settings_v2');
+    } catch (e) {}
     this.journals = this.loadJournals();
     this.settings = this.loadSettings();
 
     // 위드지저스 가져온 데이터(일기 및 댓글) 자동 동기화 & 병합
     if (window.INITIAL_IMPORTED_DATA && window.INITIAL_IMPORTED_DATA.journals) {
-      this.syncWithImportedData(false);
+      this.syncWithImportedData(true);
     }
 
     // 초기 실행 시 데이터가 전혀 없으면 샘플 데이터 추가
@@ -51,15 +55,15 @@ class JournalStore {
 
   loadJournals() {
     try {
+      if (window.INITIAL_IMPORTED_DATA && window.INITIAL_IMPORTED_DATA.journals) {
+        return { ...window.INITIAL_IMPORTED_DATA.journals };
+      }
       const data = localStorage.getItem(this.storageKey);
       if (data) return JSON.parse(data);
-      if (window.INITIAL_IMPORTED_DATA && window.INITIAL_IMPORTED_DATA.journals) {
-        return window.INITIAL_IMPORTED_DATA.journals;
-      }
       return {};
     } catch (e) {
       console.error('Failed to load journals', e);
-      return {};
+      return (window.INITIAL_IMPORTED_DATA && window.INITIAL_IMPORTED_DATA.journals) || {};
     }
   }
 
@@ -169,16 +173,20 @@ class JournalStore {
   syncWithImportedData(force = false) {
     if (!window.INITIAL_IMPORTED_DATA || !window.INITIAL_IMPORTED_DATA.journals) return 0;
     const imported = window.INITIAL_IMPORTED_DATA.journals;
+    if (force) {
+      this.journals = { ...imported };
+      this.saveJournals();
+      return Object.keys(this.journals).length;
+    }
     for (const [date, item] of Object.entries(imported)) {
       const existing = this.journals[date];
       const existingContent = (existing?.guide17?.freeContent || '').trim();
       const importedContent = (item?.guide17?.freeContent || '').trim();
       const isExistingEmpty = !existing || (!existingContent && (!existing.title || existing.title === '나의 일기'));
 
-      if (isExistingEmpty || force) {
+      if (isExistingEmpty) {
         this.journals[date] = item;
       } else {
-        // 기존 일기가 있을 경우 본문이 더 긴 쪽 또는 최신 제목 반영 및 댓글 병합
         if (importedContent && importedContent.length > existingContent.length) {
           this.journals[date].guide17 = item.guide17;
           this.journals[date].core5 = item.core5;

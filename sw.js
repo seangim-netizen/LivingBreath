@@ -1,4 +1,4 @@
-const CACHE_NAME = 'livingbreath-walk-v5';
+const CACHE_NAME = 'livingbreath-walk-v6';
 const ASSETS = [
   './',
   './index.html',
