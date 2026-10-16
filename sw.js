@@ -1,12 +1,14 @@
-const CACHE_NAME = 'jesus-walk-v1';
+const CACHE_NAME = 'livingbreath-walk-v3';
 const ASSETS = [
   './',
   './index.html',
   './css/style.css',
+  './js/imported_data.js',
   './js/store.js',
   './js/charts.js',
   './js/app.js',
-  './assets/logo.svg',
+  './assets/apple-touch-icon.png',
+  './assets/login_church_logo.png',
   './manifest.json'
 ];
 
@@ -28,11 +30,18 @@ self.addEventListener('activate', (e) => {
   );
 });
 
+// Network-First 전략: 온라인일 때는 항상 최신 일기 데이터 및 앱 코드를 가져오고, 오프라인일 때만 캐시 사용
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   e.respondWith(
-    caches.match(e.request).then((cached) => {
-      return cached || fetch(e.request).catch(() => cached);
-    })
+    fetch(e.request)
+      .then((res) => {
+        if (res && res.status === 200 && res.type === 'basic') {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(e.request, clone));
+        }
+        return res;
+      })
+      .catch(() => caches.match(e.request))
   );
 });

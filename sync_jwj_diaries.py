@@ -1,45 +1,56 @@
 """
-위드지저스(jwj.kr) 예수동행일기 자동 동기화 및 가져오기 스크립트
+위드지저스(jwj.kr) 예수동행일기 초고속 실시간 동기화 스크립트 - LivingBreath (김시웅 성도님)
 계정: swgim418 / euro9096
+Pure HTTP + 멀티스레드 병렬 처리로 1초 내외 실시간 동기화 지원
 """
 import sys
-sys.stdout.reconfigure(encoding='utf-8')
 import os
 import json
 import re
+import time
+import subprocess
+import urllib.request
+import http.cookiejar
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
 from bs4 import BeautifulSoup
-from playwright.sync_api import sync_playwright
+
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+if sys.stderr and hasattr(sys.stderr, 'reconfigure'):
+    try:
+        sys.stderr.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
 
 WORKSPACE_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_JSON_PATH = os.path.join(WORKSPACE_DIR, "jwj_imported_diaries.json")
 JS_DATA_PATH = os.path.join(WORKSPACE_DIR, "js", "imported_data.js")
 
+USER_ID = "swgim418"
+USER_PW = "euro9096"
+DEFAULT_AUTHOR = "김시웅"
+DEFAULT_GROUPS = ['Login 온라인', 'Login 주일나눔 온라인1조', 'Login 형제방']
+
+
 def clean_html(html_str):
     if not html_str:
         return ""
     soup = BeautifulSoup(html_str, 'html.parser')
-    # Replace blockquotes with quote mark
     for bq in soup.find_all('blockquote'):
         bq.string = f"\n> {bq.get_text()}\n"
-    # Replace br and p with newlines
     for br in soup.find_all(['br', 'p']):
         br.append('\n')
     text = soup.get_text()
-    # Replace non-breaking space
     text = text.replace('\xa0', ' ')
-    # Normalize excessive newlines
     text = re.sub(r'\n{3,}', '\n\n', text)
     return text.strip()
 
+
 def parse_daily_check(daily_check_str):
-    """
-    DailyCheck0000000001: 말씀읽기
-    DailyCheck0000000002: 기도
-    DailyCheck0000000003: QT
-    DailyCheck0000000004: 바라보기
-    DailyCheck0000000005: 순종하기
-    """
     res = {
         'bibleChapters': 0,
         'prayerMinutes': 0,
@@ -56,247 +67,312 @@ def parse_daily_check(daily_check_str):
         if 'DailyCheck0000000002' in data:
             val = data['DailyCheck0000000002']
             if isinstance(val, (int, float)):
-                res['prayerMinutes'] = int(val) if val > 1 else 30 # 1 indicates prayer done, fallback to 30m
+                res['prayerMinutes'] = int(val) if val > 1 else 30
         if 'DailyCheck0000000003' in data:
             res['isQtDone'] = bool(data['DailyCheck0000000003'])
         if 'DailyCheck0000000004' in data:
             res['lookJesusPercent'] = int(float(data['DailyCheck0000000004']))
         if 'DailyCheck0000000005' in data:
             res['obeyPercent'] = int(float(data['DailyCheck0000000005']))
-    except Exception as e:
+    except Exception:
         pass
     return res
 
-def run_import():
-    print("=" * 60)
-    print("🌿 위드지저스(jwj.kr) 예수동행일기 가져오기를 시작합니다...")
-    print("=" * 60)
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
+def create_authenticated_opener(user_id=USER_ID, user_pw=USER_PW):
+    cj = http.cookiejar.CookieJar()
+    opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
+    opener.addheaders = [
+        ('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'),
+        ('Referer', 'https://jwj.kr/signin/')
+    ]
 
-        print("1. https://jwj.kr 로그인 페이지 접속 중...")
-        page.goto('https://jwj.kr/signin', wait_until='networkidle')
-        page.wait_for_timeout(1000)
+    with opener.open('https://jwj.kr/api/csrf/token.do', timeout=10) as r:
+        r.read()
+    token = next((c.value for c in cj if 'XSRF' in c.name.upper() or 'CSRF' in c.name.upper()), '')
 
-        # 로그인 버튼 클릭 및 계정 입력
-        page.locator('button').first.click()
-        page.wait_for_timeout(500)
-        page.locator('input[type="email"]').fill('swgim418')
-        page.locator('input[type="password"]').fill('euro9096')
-        page.locator('button:has-text("확인")').first.click()
-        page.wait_for_timeout(3000)
+    boundary = '----WebKitFormBoundary7MA4YWxkTrZu0gW'
+    fields = {
+        'loginId': user_id,
+        'loginPwd': user_pw,
+        'autoLoginYn': 'N',
+        'lang': 'COMMONCD001000000001',
+        'snsCode': '',
+        'redirectUrl': ''
+    }
+    body = '\r\n'.join(
+        [f'--{boundary}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}' for k, v in fields.items()]
+        + [f'--{boundary}--\r\n']
+    ).encode('utf-8')
 
-        # 로그인 성공 확인
-        user_info = page.evaluate('''async () => {
-            const r = await fetch('/api/login/loginStatus.do');
-            return await r.json();
-        }''')
+    req = urllib.request.Request(
+        'https://jwj.kr/api/login/loginProc.do',
+        data=body,
+        headers={
+            'Content-Type': f'multipart/form-data; boundary={boundary}',
+            'X-XSRF-TOKEN': token
+        },
+        method='POST'
+    )
+    with opener.open(req, timeout=10) as r:
+        login_res = json.loads(r.read().decode('utf-8'))
 
-        if not user_info.get('result'):
-            print("❌ 로그인 실패! 계정 정보를 확인해주세요.")
-            browser.close()
-            return
+    if login_res.get('result') != 'success' and login_res.get('result') is not True:
+        raise RuntimeError(f"로그인 실패: {login_res}")
 
-        user_name = user_info.get('user', {}).get('memName', '사용자')
-        print(f"✓ 로그인 성공! 환영합니다, {user_name}님 (ID: swgim418)")
+    cookie_header = '; '.join([f"{c.name}={c.value}" for c in cj])
+    return opener, cookie_header
 
-        # 2. 전체 일기 목록 수집
-        print("\n2. 작성된 일기 목록을 수집합니다...")
-        all_diaries_summary = []
-        start_num = 0
-        step = 10
 
-        while True:
-            batch = page.evaluate(f'''async () => {{
-                const r = await fetch('/ajax/diary/selectMyDiaryDaily.do?gubun=diary&startNum={start_num}');
-                const data = await r.json();
-                return data.result || [];
-            }}''')
+def fetch_json_with_cookie(url, cookie_header):
+    req = urllib.request.Request(
+        url,
+        headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Referer': 'https://jwj.kr/diary',
+            'Cookie': cookie_header
+        }
+    )
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.loads(r.read().decode('utf-8'))
 
-            if not batch:
+
+def build_entry_from_raw(summary_item, det, raw_comments, default_groups=DEFAULT_GROUPS):
+    cd = summary_item['diaryCd']
+    det = det or summary_item
+
+    sort_date_str = str(summary_item.get('diarySortDate') or summary_item.get('diarySaveLDate') or cd)[:14]
+    if len(sort_date_str) >= 8:
+        y = sort_date_str[:4]
+        m = sort_date_str[4:6]
+        d = sort_date_str[6:8]
+        date_str = f"{y}-{m}-{d}"
+    else:
+        date_str = datetime.now().strftime("%Y-%m-%d")
+
+    if len(sort_date_str) >= 12:
+        hh = sort_date_str[8:10]
+        mm = sort_date_str[10:12]
+        time_str = f"{hh}:{mm}"
+    else:
+        time_str = summary_item.get('rtime') or "21:00"
+
+    title = det.get('diaryTitle') or summary_item.get('diaryTitle') or "나의 일기"
+    raw_cnts = det.get('diaryCnts') or summary_item.get('diaryCnts') or ""
+    clean_text = clean_html(raw_cnts)
+
+    faith = parse_daily_check(summary_item.get('dailyCheck'))
+
+    tags = []
+    found_tags = re.findall(r'#([a-zA-Z0-9가-힣_]+)', title + " " + clean_text)
+    for t in found_tags:
+        tag_formatted = f"#{t}"
+        if tag_formatted not in tags:
+            tags.append(tag_formatted)
+    if not tags:
+        tags = ['#예수동행']
+
+    gratitudes = []
+    for line in clean_text.split('\n'):
+        l = line.strip()
+        if ('감사' in l or '은혜' in l) and 5 < len(l) < 150:
+            clean_l = re.sub(r'^[0-9\.\-\*•]+\s*', '', l)
+            if clean_l and clean_l not in gratitudes:
+                gratitudes.append(clean_l)
+        if len(gratitudes) >= 3:
+            break
+    while len(gratitudes) < 3:
+        gratitudes.append('')
+
+    answers14 = {}
+    look_pct = faith.get('lookJesusPercent', 50)
+    for q_idx in range(1, 15):
+        if q_idx == 12:
+            answers14[q_idx] = 'no'
+        else:
+            answers14[q_idx] = 'yes' if look_pct >= 60 else ('yes' if q_idx in [1, 2, 4, 13] else 'no')
+
+    comments = []
+    for c in (raw_comments or []):
+        author = c.get('memName') or c.get('nickName') or '나눔 성도'
+        c_text = clean_html(c.get('postCnts') or c.get('commentCnts') or '')
+        if c_text:
+            c_date = c.get('showdate') or str(c.get('regLdate') or c.get('saveLDate') or '')[:10]
+            comments.append({
+                'id': c.get('postCd') or c.get('boardCommentCd') or str(datetime.now().timestamp()),
+                'author': author,
+                'content': c_text,
+                'date': c_date,
+                'room': c.get('roomName') or 'Login 온라인'
+            })
+
+    entry = {
+        'date': date_str,
+        'time': time_str,
+        'title': title,
+        'tags': tags,
+        'visibility': list(default_groups),
+        'faith': faith,
+        'comments': comments,
+        'guide17': {
+            'answers14': answers14,
+            'thinkMinutes': int(look_pct * 1.2),
+            'gratitudeList': gratitudes,
+            'freeContent': clean_text
+        },
+        'core5': {
+            'fq1': f"예수님을 하루 종일 {look_pct}% 바라보았습니다.",
+            'fq2': clean_text.split('\n')[0] if clean_text else '',
+            'fq3': f"말씀에 {faith.get('obeyPercent', 0)}% 순종하며 살았습니다.",
+            'fq4': '',
+            'fq5_1': gratitudes[0] if len(gratitudes) > 0 else '',
+            'fq5_2': gratitudes[1] if len(gratitudes) > 1 else '',
+            'fq5_3': gratitudes[2] if len(gratitudes) > 2 else ''
+        },
+        'jwj_diaryCd': cd,
+        'updatedAt': datetime.now().isoformat()
+    }
+    return date_str, entry, clean_text
+
+
+def run_import(full_sync=False, push_git=True):
+    t_start = time.time()
+    print("=" * 60, flush=True)
+    print(f"🌿 LivingBreath ({DEFAULT_AUTHOR}) 위드지저스 실시간 동기화 시작...", flush=True)
+    print("=" * 60, flush=True)
+
+    existing_journals = {}
+    existing_cds = set()
+    if not full_sync and os.path.exists(OUTPUT_JSON_PATH):
+        try:
+            with open(OUTPUT_JSON_PATH, 'r', encoding='utf-8') as f:
+                prev_data = json.load(f)
+                existing_journals = prev_data.get('journals', {})
+                for j in existing_journals.values():
+                    if j.get('jwj_diaryCd'):
+                        existing_cds.add(j['jwj_diaryCd'])
+        except Exception:
+            existing_journals = {}
+
+    opener, cookie_header = create_authenticated_opener(USER_ID, USER_PW)
+    print(f"✓ 로그인 완료 ({time.time() - t_start:.2f}s)", flush=True)
+
+    # 목록 수집: 증분 동기화일 때는 최근 20개(또는 신규 일기가 모두 나올 때까지), 전체 동기화일 때는 전체
+    summaries_to_fetch = []
+    start_num = 0
+    step = 10
+
+    while True:
+        url = f"https://jwj.kr/ajax/diary/selectMyDiaryDaily.do?gubun=diary&startNum={start_num}"
+        batch = fetch_json_with_cookie(url, cookie_header).get('result', [])
+        if not batch:
+            break
+        summaries_to_fetch.extend(batch)
+        start_num += step
+
+        if not full_sync and existing_cds:
+            # 최근 20개까지는 댓글/수정 반영을 위해 무조건 확인하고, 그 이후는 이미 있는 코드면 중단
+            if start_num >= 20 and all(item.get('diaryCd') in existing_cds for item in batch):
                 break
 
-            all_diaries_summary.extend(batch)
-            print(f"  - 현재까지 {len(all_diaries_summary)}개 목록 조회 완료...")
-            start_num += step
-            page.wait_for_timeout(200)
+    print(f"✓ 동기화 대상 일기 {len(summaries_to_fetch)}개 확인 ({time.time() - t_start:.2f}s)", flush=True)
 
-        total_count = len(all_diaries_summary)
-        print(f"✓ 총 {total_count}개의 일기 목록을 확보했습니다!\n")
+    def fetch_one_detail(summary_item):
+        cd = summary_item['diaryCd']
+        det_url = f"https://jwj.kr/api/login/selectDiaryDet.do?diaryCd={cd}&boardCd=Board000000000000006"
+        com_url = f"https://jwj.kr/api/login/selectCommentList.do?diaryCd={cd}&boardCd=Board000000000000006"
+        try:
+            det_res = fetch_json_with_cookie(det_url, cookie_header).get('result')
+        except Exception:
+            det_res = None
+        try:
+            com_res = fetch_json_with_cookie(com_url, cookie_header).get('result', [])
+        except Exception:
+            com_res = []
+        return summary_item, det_res, com_res
 
-        # 3. 각 일기의 상세 본문 내용 가져오기 (병렬 청크 처리)
-        print("3. 각 일기의 본문 상세 내용 및 묵상/감사 데이터를 수집합니다...")
-        all_journals_dict = {}
+    all_journals_dict = dict(existing_journals)
 
-        chunk_size = 15
-        for i in range(0, total_count, chunk_size):
-            chunk = all_diaries_summary[i:i+chunk_size]
-            chunk_cds = [item['diaryCd'] for item in chunk]
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        results = list(executor.map(fetch_one_detail, summaries_to_fetch))
 
-            # 병렬로 청크 내 상세 내용 및 나눔 댓글 fetch
-            details = page.evaluate(f'''async (cds) => {{
-                const promises = cds.map(async cd => {{
-                    try {{
-                        const [detRes, commentRes] = await Promise.all([
-                            fetch('/api/login/selectDiaryDet.do?diaryCd=' + cd + '&boardCd=Board000000000000006').then(r => r.json()).catch(() => ({{ result: null }})),
-                            fetch('/api/login/selectCommentList.do?diaryCd=' + cd + '&boardCd=Board000000000000006').then(r => r.json()).catch(() => ({{ result: [] }}))
-                        ]);
-                        return {{
-                            cd,
-                            data: detRes ? detRes.result : null,
-                            comments: commentRes ? (commentRes.result || []) : []
-                        }};
-                    }} catch(err) {{
-                        return {{ cd, data: null, comments: [] }};
-                    }}
-                }});
-                return await Promise.all(promises);
-            }}''', chunk_cds)
+    # 오래된 순서부터 넣되, 같은 날짜에 빈 임시저장과 실제 본문이 겹치면 실제 본문을 우선 보존
+    for summary_item, det_res, com_res in reversed(results):
+        date_str, entry, clean_text = build_entry_from_raw(summary_item, det_res, com_res, DEFAULT_GROUPS)
+        prev = all_journals_dict.get(date_str)
+        if prev:
+            prev_text = (prev.get('guide17', {}).get('freeContent') or '').strip()
+            if prev_text and not clean_text.strip():
+                # 기존 본문이 있는데 새 항목이 빈 초안이면 댓글만 병합하고 본문 유지
+                if entry.get('comments'):
+                    prev['comments'] = entry['comments']
+                continue
+        all_journals_dict[date_str] = entry
 
-            detail_map = {item['cd']: item['data'] for item in details}
-            comment_map = {item['cd']: item.get('comments', []) for item in details}
-
-            for summary_item in chunk:
-                cd = summary_item['diaryCd']
-                det = detail_map.get(cd) or summary_item
-
-                # 날짜 및 시간 파싱 (diarySortDate 형식: YYYYMMDDHHmmss or YYYYMMDD)
-                sort_date_str = str(summary_item.get('diarySortDate') or summary_item.get('diarySaveLDate') or cd)[:14]
-                if len(sort_date_str) >= 8:
-                    y = sort_date_str[:4]
-                    m = sort_date_str[4:6]
-                    d = sort_date_str[6:8]
-                    date_str = f"{y}-{m}-{d}"
-                else:
-                    date_str = datetime.now().strftime("%Y-%m-%d")
-
-                if len(sort_date_str) >= 12:
-                    hh = sort_date_str[8:10]
-                    mm = sort_date_str[10:12]
-                    time_str = f"{hh}:{mm}"
-                else:
-                    time_str = summary_item.get('rtime') or "21:00"
-
-                title = det.get('diaryTitle') or summary_item.get('diaryTitle') or "나의 일기"
-                raw_cnts = det.get('diaryCnts') or summary_item.get('diaryCnts') or ""
-                clean_text = clean_html(raw_cnts)
-
-                # 신앙 지표 파싱
-                faith = parse_daily_check(summary_item.get('dailyCheck'))
-
-                # 태그 추출 (#태그 추출)
-                tags = []
-                found_tags = re.findall(r'#([a-zA-Z0-9가-힣_]+)', title + " " + clean_text)
-                for t in found_tags:
-                    tag_formatted = f"#{t}"
-                    if tag_formatted not in tags:
-                        tags.append(tag_formatted)
-                if not tags:
-                    tags = ['#예수동행']
-
-                # 감사제목 추출 (본문에서 "감사" 관련 문장 찾기)
-                gratitudes = []
-                for line in clean_text.split('\n'):
-                    l = line.strip()
-                    if ('감사' in l or '은혜' in l) and len(l) > 5 and len(l) < 150:
-                        clean_l = re.sub(r'^[0-9\.\-\*•]+\s*', '', l)
-                        if clean_l and clean_l not in gratitudes:
-                            gratitudes.append(clean_l)
-                    if len(gratitudes) >= 3:
-                        break
-                while len(gratitudes) < 3:
-                    gratitudes.append('')
-
-                # 14문항 기본값 (바라보기 %에 맞춰 역산 추정)
-                answers14 = {}
-                look_pct = faith.get('lookJesusPercent', 50)
-                for q_idx in range(1, 15):
-                    if q_idx == 12:
-                        answers14[q_idx] = 'no' # 싫어할 행동 피함
-                    else:
-                        answers14[q_idx] = 'yes' if look_pct >= 60 else ('yes' if q_idx in [1, 2, 4, 13] else 'no')
-
-                # 나눔 댓글 파싱
-                raw_comments = comment_map.get(cd, [])
-                comments = []
-                for c in raw_comments:
-                    author = c.get('memName') or c.get('nickName') or '나눔 성도'
-                    c_text = clean_html(c.get('postCnts') or '')
-                    if c_text:
-                        c_date = c.get('showdate') or str(c.get('regLdate') or '')[:10]
-                        comments.append({
-                            'id': c.get('postCd') or '',
-                            'author': author,
-                            'content': c_text,
-                            'date': c_date,
-                            'room': c.get('roomName') or 'Login 온라인'
-                        })
-
-                entry = {
-                    'date': date_str,
-                    'time': time_str,
-                    'title': title,
-                    'tags': tags,
-                    'visibility': ['Login 온라인', 'Login 주일나눔 온라인1조', 'Login 형제방'],
-                    'faith': faith,
-                    'comments': comments,
-                    'guide17': {
-                        'answers14': answers14,
-                        'thinkMinutes': int(look_pct * 1.2),
-                        'gratitudeList': gratitudes,
-                        'freeContent': clean_text
-                    },
-                    'core5': {
-                        'fq1': f"예수님을 하루 종일 {look_pct}% 바라보았습니다.",
-                        'fq2': clean_text.split('\n')[0] if clean_text else '',
-                        'fq3': f"말씀에 {faith.get('obeyPercent', 0)}% 순종하며 살았습니다.",
-                        'fq4': '',
-                        'fq5_1': gratitudes[0] if len(gratitudes) > 0 else '',
-                        'fq5_2': gratitudes[1] if len(gratitudes) > 1 else '',
-                        'fq5_3': gratitudes[2] if len(gratitudes) > 2 else ''
-                    },
-                    'jwj_diaryCd': cd,
-                    'updatedAt': datetime.now().isoformat()
-                }
-
-                all_journals_dict[date_str] = entry
-
-            done_count = min(total_count, i + chunk_size)
-            print(f"  [진행률: {done_count}/{total_count}] ({done_count*100//total_count}%) 일기 본문 변환 완료")
-
-        browser.close()
-
-    # 4. JSON 파일로 저장
     backup_payload = {
         'version': '2.0',
         'exportedAt': datetime.now().isoformat(),
         'source': 'https://jwj.kr/diary',
-        'account': 'swgim418',
+        'account': USER_ID,
         'totalCount': len(all_journals_dict),
         'settings': {
-            'authorName': user_name,
-            'customGroups': ['Login 온라인', 'Login 주일나눔 온라인1조', 'Login 형제방']
+            'authorName': DEFAULT_AUTHOR,
+            'customGroups': DEFAULT_GROUPS
         },
         'journals': all_journals_dict
     }
 
     with open(OUTPUT_JSON_PATH, 'w', encoding='utf-8') as f:
         json.dump(backup_payload, f, ensure_ascii=False, indent=2)
-    print(f"\n✓ 백업 JSON 파일 저장 완료: {OUTPUT_JSON_PATH}")
 
-    # 5. 웹앱 로컬 스토리지 자동 연동용 JS 파일 생성
     js_content = f"// 자동 생성된 위드지저스(jwj.kr) 일기 데이터\nwindow.INITIAL_IMPORTED_DATA = {json.dumps(backup_payload, ensure_ascii=False)};\n"
     with open(JS_DATA_PATH, 'w', encoding='utf-8') as f:
         f.write(js_content)
-    print(f"✓ 웹앱 초기 로드 데이터 연동 완료: {JS_DATA_PATH}")
 
-    print("=" * 60)
-    print(f"🎉 성공! 총 {len(all_journals_dict)}개의 예수동행일기를 모두 성공적으로 가져왔습니다!")
-    print("=" * 60)
+    # 상위 폴더나 하위 LivingBreath 폴더가 함께 있으면 양쪽 모두 최신 파일 유지
+    parent_dir = os.path.dirname(WORKSPACE_DIR)
+    if os.path.basename(WORKSPACE_DIR).lower() == 'livingbreath':
+        root_json = os.path.join(parent_dir, "jwj_imported_diaries.json")
+        root_js = os.path.join(parent_dir, "js", "imported_data.js")
+        try:
+            if os.path.exists(os.path.join(parent_dir, "js")):
+                with open(root_json, 'w', encoding='utf-8') as f:
+                    json.dump(backup_payload, f, ensure_ascii=False, indent=2)
+                with open(root_js, 'w', encoding='utf-8') as f:
+                    f.write(js_content)
+        except Exception:
+            pass
+    else:
+        sub_dir = os.path.join(WORKSPACE_DIR, "LivingBreath")
+        if os.path.exists(os.path.join(sub_dir, "js")):
+            try:
+                with open(os.path.join(sub_dir, "jwj_imported_diaries.json"), 'w', encoding='utf-8') as f:
+                    json.dump(backup_payload, f, ensure_ascii=False, indent=2)
+                with open(os.path.join(sub_dir, "js", "imported_data.js"), 'w', encoding='utf-8') as f:
+                    f.write(js_content)
+            except Exception:
+                pass
+
+    elapsed = time.time() - t_start
+    print(f"🎉 완료! 총 {len(all_journals_dict)}편 동기화됨 (소요시간: {elapsed:.2f}초)", flush=True)
+
+    if push_git:
+        git_dir = WORKSPACE_DIR if os.path.exists(os.path.join(WORKSPACE_DIR, ".git")) else os.path.join(WORKSPACE_DIR, "LivingBreath")
+        if os.path.exists(os.path.join(git_dir, ".git")):
+            try:
+                subprocess.run(['git', 'add', 'jwj_imported_diaries.json', 'js/imported_data.js'], cwd=git_dir, check=True)
+                status = subprocess.run(['git', 'status', '--porcelain'], cwd=git_dir, capture_output=True, text=True)
+                if status.stdout.strip():
+                    subprocess.run(['git', 'commit', '-m', f'chore: auto-sync {len(all_journals_dict)} diaries from jwj.kr'], cwd=git_dir, check=True)
+                    subprocess.run(['git', 'push', 'origin', 'main'], cwd=git_dir, check=True)
+                    print("✓ GitHub Pages 자동 배포 푸시 완료!", flush=True)
+            except Exception as e:
+                print(f"  [알림] Git 푸시 참고: {e}", flush=True)
+
     return backup_payload
 
-if __name__ == '__main__':
-    run_import()
 
+if __name__ == '__main__':
+    full = '--full' in sys.argv
+    no_push = '--no-push' in sys.argv
+    run_import(full_sync=full, push_git=not no_push)
