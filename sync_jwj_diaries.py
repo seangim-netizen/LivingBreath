@@ -256,8 +256,10 @@ def run_import(full_sync=False, push_git=True, skip_unchanged=False):
 
     def _journals_snapshot(journals):
         # updatedAt은 실행할 때마다 현재 시각으로 찍히므로 비교에서 제외
+        # (새 데이터는 answers14 키가 정수, 저장된 파일은 문자열이므로 JSON 왕복으로 통일)
+        normalized = json.loads(json.dumps(journals, ensure_ascii=False))
         return json.dumps({k: {kk: vv for kk, vv in v.items() if kk != 'updatedAt'} if isinstance(v, dict) else v
-                           for k, v in journals.items()}, ensure_ascii=False, sort_keys=True)
+                           for k, v in normalized.items()}, ensure_ascii=False, sort_keys=True)
 
     if os.path.exists(OUTPUT_JSON_PATH):
         try:
