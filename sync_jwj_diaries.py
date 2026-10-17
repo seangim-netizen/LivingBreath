@@ -30,8 +30,9 @@ WORKSPACE_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_JSON_PATH = os.path.join(WORKSPACE_DIR, "jwj_imported_diaries.json")
 JS_DATA_PATH = os.path.join(WORKSPACE_DIR, "js", "imported_data.js")
 
-USER_ID = "swgim418"
-USER_PW = "euro9096"
+# 환경변수(GitHub Actions Secrets 등)가 있으면 우선 사용, 없으면 기존 값 사용
+USER_ID = os.environ.get("JWJ_USER_ID") or "swgim418"
+USER_PW = os.environ.get("JWJ_USER_PW") or "euro9096"
 DEFAULT_AUTHOR = "김시웅"
 DEFAULT_GROUPS = ['Login 온라인', 'Login 주일나눔 온라인1조', 'Login 형제방']
 
@@ -371,6 +372,10 @@ def run_import(full_sync=False, push_git=True):
                 status = subprocess.run(['git', 'status', '--porcelain'], cwd=git_dir, capture_output=True, text=True)
                 if status.stdout.strip():
                     subprocess.run(['git', 'commit', '-m', f'chore: auto-sync {len(all_journals_dict)} diaries from jwj.kr'], cwd=git_dir, check=True)
+                    # GitHub Actions 자동 동기화와 충돌하지 않도록 푸시 전에 최신 내용과 합침
+                    pull = subprocess.run(['git', 'pull', '--rebase', '--autostash', '-X', 'theirs', 'origin', 'main'], cwd=git_dir)
+                    if pull.returncode != 0:
+                        subprocess.run(['git', 'rebase', '--abort'], cwd=git_dir)
                     subprocess.run(['git', 'push', 'origin', 'main'], cwd=git_dir, check=True)
                     print("✓ GitHub Pages 자동 배포 푸시 완료!", flush=True)
             except Exception as e:
