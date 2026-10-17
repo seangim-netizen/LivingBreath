@@ -253,11 +253,17 @@ def run_import(full_sync=False, push_git=True, skip_unchanged=False):
     existing_cds = set()
     prev_journals_snapshot = None
     prev_exported_at = None
+
+    def _journals_snapshot(journals):
+        # updatedAt은 실행할 때마다 현재 시각으로 찍히므로 비교에서 제외
+        return json.dumps({k: {kk: vv for kk, vv in v.items() if kk != 'updatedAt'} if isinstance(v, dict) else v
+                           for k, v in journals.items()}, ensure_ascii=False, sort_keys=True)
+
     if os.path.exists(OUTPUT_JSON_PATH):
         try:
             with open(OUTPUT_JSON_PATH, 'r', encoding='utf-8') as f:
                 _prev = json.load(f)
-            prev_journals_snapshot = json.dumps(_prev.get('journals', {}), ensure_ascii=False, sort_keys=True)
+            prev_journals_snapshot = _journals_snapshot(_prev.get('journals', {}))
             prev_exported_at = _prev.get('exportedAt')
         except Exception:
             pass
@@ -329,7 +335,7 @@ def run_import(full_sync=False, push_git=True, skip_unchanged=False):
 
     # 변경사항이 없고 마지막 동기화가 3시간 이내면 파일/커밋을 건너뜀 (3분마다 실행해도 불필요한 배포 방지)
     # 3시간마다는 exportedAt만 갱신해 앱의 연속일수 계산이 '동기화 지연'과 '실제 누락'을 구분하게 함
-    new_snapshot = json.dumps(all_journals_dict, ensure_ascii=False, sort_keys=True)
+    new_snapshot = _journals_snapshot(all_journals_dict)
     if skip_unchanged and new_snapshot == prev_journals_snapshot and prev_exported_at:
         try:
             age_sec = (datetime.now() - datetime.fromisoformat(prev_exported_at)).total_seconds()
