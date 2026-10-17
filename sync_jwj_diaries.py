@@ -243,7 +243,7 @@ def build_entry_from_raw(summary_item, det, raw_comments, default_groups=DEFAULT
     return date_str, entry, clean_text
 
 
-def run_import(full_sync=False, push_git=True):
+def run_import(full_sync=False, push_git=True, skip_unchanged=False):
     t_start = time.time()
     print("=" * 60, flush=True)
     print(f"🌿 LivingBreath ({DEFAULT_AUTHOR}) 위드지저스 실시간 동기화 시작...", flush=True)
@@ -251,6 +251,16 @@ def run_import(full_sync=False, push_git=True):
 
     existing_journals = {}
     existing_cds = set()
+    prev_journals_snapshot = None
+    prev_exported_at = None
+    if os.path.exists(OUTPUT_JSON_PATH):
+        try:
+            with open(OUTPUT_JSON_PATH, 'r', encoding='utf-8') as f:
+                _prev = json.load(f)
+            prev_journals_snapshot = json.dumps(_prev.get('journals', {}), ensure_ascii=False, sort_keys=True)
+            prev_exported_at = _prev.get('exportedAt')
+        except Exception:
+            pass
     if not full_sync and os.path.exists(OUTPUT_JSON_PATH):
         try:
             with open(OUTPUT_JSON_PATH, 'r', encoding='utf-8') as f:
@@ -317,6 +327,18 @@ def run_import(full_sync=False, push_git=True):
                 continue
         all_journals_dict[date_str] = entry
 
+    # 변경사항이 없고 마지막 동기화가 3시간 이내면 파일/커밋을 건너뜀 (3분마다 실행해도 불필요한 배포 방지)
+    # 3시간마다는 exportedAt만 갱신해 앱의 연속일수 계산이 '동기화 지연'과 '실제 누락'을 구분하게 함
+    new_snapshot = json.dumps(all_journals_dict, ensure_ascii=False, sort_keys=True)
+    if skip_unchanged and new_snapshot == prev_journals_snapshot and prev_exported_at:
+        try:
+            age_sec = (datetime.now() - datetime.fromisoformat(prev_exported_at)).total_seconds()
+        except Exception:
+            age_sec = None
+        if age_sec is not None and 0 <= age_sec < 3 * 3600:
+            print(f"✓ 변경 없음 - 총 {len(all_journals_dict)}편 (마지막 반영 {int(age_sec // 60)}분 전, 배포 생략)", flush=True)
+            return None
+
     backup_payload = {
         'version': '2.0',
         'exportedAt': datetime.now().isoformat(),
@@ -369,8 +391,8 @@ def run_import(full_sync=False, push_git=True):
         if os.path.exists(os.path.join(git_dir, ".git")):
             try:
                 subprocess.run(['git', 'add', 'jwj_imported_diaries.json', 'js/imported_data.js'], cwd=git_dir, check=True)
-                status = subprocess.run(['git', 'status', '--porcelain'], cwd=git_dir, capture_output=True, text=True)
-                if status.stdout.strip():
+                staged = subprocess.run(['git', 'diff', '--cached', '--quiet', '--', 'jwj_imported_diaries.json', 'js/imported_data.js'], cwd=git_dir)
+                if staged.returncode != 0:
                     subprocess.run(['git', 'commit', '-m', f'chore: auto-sync {len(all_journals_dict)} diaries from jwj.kr'], cwd=git_dir, check=True)
                     # GitHub Actions 자동 동기화와 충돌하지 않도록 푸시 전에 최신 내용과 합침
                     pull = subprocess.run(['git', 'pull', '--rebase', '--autostash', '-X', 'theirs', 'origin', 'main'], cwd=git_dir)
@@ -387,4 +409,4 @@ def run_import(full_sync=False, push_git=True):
 if __name__ == '__main__':
     full = '--full' in sys.argv
     no_push = '--no-push' in sys.argv
-    run_import(full_sync=full, push_git=not no_push)
+    run_import(full_sync=full, push_git=not no_push, skip_unchanged=not full)
